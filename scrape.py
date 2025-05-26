@@ -1,3 +1,4 @@
+import datetime
 import os
 import pandas as pd
 from pathlib import Path
@@ -20,7 +21,8 @@ class ScrapeMarketData():
             self,
             category: str = 'linear',
             symbol: str = 'BTCUSDT',
-            interval: str = '1',         
+            interval: str = '1',
+            backtest: bool = False,       
         ) -> None:
         super().__init__()
 
@@ -36,12 +38,12 @@ class ScrapeMarketData():
         )
 
         #pathのcsvファイルがすでに存在する場合はcsvをDataFrameに変換
-        #ない場合はNone
-        if os.path.isfile(self.PATH):
+        #バックテストの時とファイルがない場合はNone
+        if not backtest and os.path.isfile(self.PATH):
             self.df = pd.read_csv(
                 self.PATH,
                 header=0,
-                index_col=0
+                index_col=0,
             )
         else:
             self.df = None
@@ -56,10 +58,14 @@ class ScrapeMarketData():
         """
         #self.dfがある場合は結合させる
         #dfのサイズが0より大きい場合はすでにcsvに保存されているデータがある
-        if self.df.size < 0:
-            self.df = pd.concat([self.df, df], axis=0)
+        if self.df.size > 0:
+            concat_df = pd.concat([self.df, df], axis=0)
             #indexが重複しているものは初めのデータを使用する
-            self.df = self.df[~self.df.index.duplicated(keep='first')]
+            df = concat_df[~concat_df.duplicated(keep='first', subset='開始時刻')]
+
+        #dataframeのサイズが100以上あるときは新しいデータから100個分残して削除する
+        df = df.drop(df.iloc[: -100].index)
+        df.reset_index(drop=True)
 
         #上の階層のディレクトリがない場合は作成する
         self.PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -88,11 +94,15 @@ class ScrapeMarketData():
         #responseの中のローソク足のデータ
         data = r.json()['result']['list']
 
-        #dataframeに変換して時間をindexに変更
+        #dataframeに変換して時間をdatetime型に変更
+        #開始時刻を昇順に並べ替え
         df = pd.DataFrame(
                 data,
                 columns=self.COLUMNS
-            )
-        df = df.set_index('開始時刻')
+            ).sort_values(by='開始時刻').reset_index(drop=True)
+        
+        df['開始時刻'] = [
+            #ミリ秒を秒数に変換してからdatetime型
+            datetime.datetime.fromtimestamp(float(timestamp) / 1000) for timestamp in df['開始時刻']]
         
         return df
