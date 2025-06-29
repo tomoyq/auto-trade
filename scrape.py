@@ -63,9 +63,8 @@ class ScrapeMarketData():
             #indexが重複しているものは初めのデータを使用する
             df = concat_df[~concat_df.duplicated(keep='first', subset='開始時刻')]
 
-        #dataframeのサイズが100以上あるときは新しいデータから100個分残して削除する
-        df = df.drop(df.iloc[: -100].index)
-        df.reset_index(drop=True)
+        #dataframeのサイズが200以上あるときは新しいデータから200個分残して削除する
+        df = df.drop(df.iloc[: -200].index).reset_index(drop=True)
 
         #上の階層のディレクトリがない場合は作成する
         self.PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -104,5 +103,8 @@ class ScrapeMarketData():
         df['開始時刻'] = [
             #ミリ秒を秒数に変換してからdatetime型
             datetime.datetime.fromtimestamp(float(timestamp) / 1000) for timestamp in df['開始時刻']]
+        
+        #開始時刻以外のカラムをfloat型に変換
+        df[df.columns[df.columns != '開始時刻']] = df[df.columns[df.columns != '開始時刻']].astype(float)
         
         return df
